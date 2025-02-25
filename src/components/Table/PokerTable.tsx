@@ -59,9 +59,10 @@ const PokerTable: React.FC = () => {
   useEffect(() => {
     if (gameState.isGameStarted) {
       checkRoundEnd();
-      setIsPlayerTurn(gameState.players[gameState.currentPlayer].isHuman);
+      const currentPlayer = gameState.players[gameState.currentPlayer];
+      setIsPlayerTurn(currentPlayer.isHuman && currentPlayer.status === 'acting');
     }
-  }, [gameState.players]);
+  }, [gameState.currentPlayer, gameState.players[gameState.currentPlayer].status]);
   
   // 玩家操作按钮
   const ActionButtons = () => (
@@ -107,22 +108,32 @@ const PokerTable: React.FC = () => {
   
   // 获取玩家在桌子上的位置
   const getPlayerPosition = (index: number) => {
-    // 按照德州扑克桌的布局，将8个位置分配到桌子的四条边上
-    // 下边：CO(7), BTN(0)
-    // 右边：SB(1), BB(2)
-    // 上边：UTG(3), UTG+1(4)
-    // 左边：MP(5), HJ(6)
-    switch (index) {
-      case 0: return { gridArea: "bottom-right" }; // BTN
-      case 1: return { gridArea: "right-top" };    // SB
-      case 2: return { gridArea: "right-bottom" }; // BB
-      case 3: return { gridArea: "top-right" };    // UTG
-      case 4: return { gridArea: "top-left" };     // UTG+1
-      case 5: return { gridArea: "left-top" };     // MP
-      case 6: return { gridArea: "left-bottom" };  // HJ
-      case 7: return { gridArea: "bottom-left" };  // CO
-      default: return {};
+    // 人类玩家固定在bottom-right位置
+    if (gameState.players[index].isHuman) {
+      return { gridArea: "bottom-right" };
     }
+    
+    // AI玩家按顺时针顺序排列
+    // 假设玩家在位置0，其他位置按顺时针排列
+    const positions = [
+      "bottom-left",  // 1号位
+      "left-bottom", // 2号位
+      "left-top",    // 3号位
+      "top-left",    // 4号位
+      "top-right",   // 5号位
+      "right-top",   // 6号位
+      "right-bottom" // 7号位
+    ];
+    
+    // 找出这个AI是第几个AI（跳过人类玩家）
+    let aiIndex = 0;
+    for (let i = 0; i < index; i++) {
+      if (!gameState.players[i].isHuman) {
+        aiIndex++;
+      }
+    }
+    
+    return { gridArea: positions[aiIndex] };
   };
   
   return (
@@ -134,19 +145,7 @@ const PokerTable: React.FC = () => {
     >
       <Center>
         <VStack spacing={4}>
-          <Text color="white" fontSize="2xl">
-            底池: {gameState.pot} BB
-          </Text>
-          
-          <Text color="white" fontSize="lg">
-            {gameState.gamePhase === 'not_started' ? '等待开始' :
-             gameState.gamePhase === 'preflop' ? '翻牌前' :
-             gameState.gamePhase === 'flop' ? '翻牌' :
-             gameState.gamePhase === 'turn' ? '转牌' :
-             gameState.gamePhase === 'river' ? '河牌' : '摊牌'}
-          </Text>
-          
-          {/* 扑克桌布局 */}
+          {/* 方形扑克桌布局 */}
           <Box
             w="1440px"
             h="1050px"
@@ -163,13 +162,35 @@ const PokerTable: React.FC = () => {
               left="50%"
               transform="translate(-50%, -50%)"
               w="600px"
-              h="220px"
+              h="400px"
               bg="green.500"
               borderRadius="lg"
               p={4}
               zIndex={1}
+              flexDirection="column"
             >
+              {/* 底池和回合信息放在公共牌上方 */}
+              <VStack spacing={2} mb={4}>
+                <Text color="white" fontSize="2xl">
+                  底池: {gameState.pot} BB
+                </Text>
+                
+                <Text color="white" fontSize="lg">
+                  {gameState.gamePhase === 'not_started' ? '等待开始' :
+                   gameState.gamePhase === 'preflop' ? '翻牌前' :
+                   gameState.gamePhase === 'flop' ? '翻牌' :
+                   gameState.gamePhase === 'turn' ? '转牌' :
+                   gameState.gamePhase === 'river' ? '河牌' : '摊牌'}
+                </Text>
+              </VStack>
+              
+              {/* 公共牌 */}
               <CommunityCards cards={gameState.communityCards} />
+              
+              {/* 操作按钮放在公共牌下方 */}
+              <Box mt={4} zIndex={2}>
+                <ActionButtons />
+              </Box>
             </Center>
             
             {/* 玩家位置 - 使用Grid布局 */}
@@ -201,11 +222,6 @@ const PokerTable: React.FC = () => {
                 </Box>
               ))}
             </Grid>
-          </Box>
-          
-          {/* 操作按钮放在桌子下方，确保不被玩家挡住 */}
-          <Box position="relative" zIndex={2}>
-            <ActionButtons />
           </Box>
         </VStack>
       </Center>

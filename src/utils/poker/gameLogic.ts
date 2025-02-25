@@ -37,17 +37,18 @@ export const getPositionName = (positionIndex: number, playerCount: number): Pos
   // HJ (Hijack) - 劫机位
   // CO (Cut Off) - 切牌位
   
-  // 按照德州扑克桌的布局，位置顺序为：
-  // 0: BTN (庄家位)
-  // 1: SB (小盲位)
-  // 2: BB (大盲位)
-  // 3: UTG (枪口位)
-  // 4: UTG+1 (枪口位+1)
-  // 5: MP (中间位置)
-  // 6: HJ (劫机位)
-  // 7: CO (切牌位)
+  // 按照德州扑克标准的顺时针方向排列位置
+  // 位置顺序：SB -> BB -> UTG -> UTG+1 -> MP -> HJ -> CO -> BTN -> SB
+  // 0: SB (小盲位)
+  // 1: BB (大盲位)
+  // 2: UTG (枪口位)
+  // 3: UTG+1 (枪口位+1)
+  // 4: MP (中间位置)
+  // 5: HJ (劫机位)
+  // 6: CO (切牌位)
+  // 7: BTN (庄家位)
   
-  const positionNames: PositionName[] = ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'MP', 'HJ', 'CO'];
+  const positionNames: PositionName[] = ['SB', 'BB', 'UTG', 'UTG+1', 'MP', 'HJ', 'CO', 'BTN'];
   
   // 根据位置索引获取位置名称
   return positionNames[positionIndex % playerCount];
@@ -89,6 +90,47 @@ export const initializeGameState = (): GameState => {
   };
 };
 
+// 获取下一个应该行动的玩家
+const getNextActivePlayer = (state: GameState, startPosition: number): number => {
+  const playerCount = state.players.length;
+  let nextPlayer = startPosition;
+  
+  // 寻找下一个未弃牌的玩家
+  do {
+    nextPlayer = (nextPlayer + 1) % playerCount;
+  } while (
+    nextPlayer !== startPosition && 
+    (!state.players[nextPlayer].isActive || state.players[nextPlayer].status === 'folded')
+  );
+  
+  return nextPlayer;
+};
+
+// 获取第一个行动位置
+const getFirstActionPosition = (state: GameState): number => {
+  const playerCount = state.players.length;
+  
+  if (state.gamePhase === 'preflop') {
+    // 翻牌前从UTG开始
+    // UTG在BB后面，即庄家位+3
+    let utgPos = (state.dealerPosition + 3) % playerCount;
+    
+    // 如果UTG已经弃牌，找到之后第一个未弃牌的玩家
+    if (!state.players[utgPos].isActive || state.players[utgPos].status === 'folded') {
+      return getNextActivePlayer(state, utgPos);
+    }
+    return utgPos;
+  } else {
+    // 翻牌后从小盲位开始
+    // 如果小盲已经弃牌，找到小盲之后第一个未弃牌的玩家
+    const sbPos = (state.dealerPosition + 1) % playerCount;
+    if (state.players[sbPos].isActive && state.players[sbPos].status !== 'folded') {
+      return sbPos;
+    }
+    return getNextActivePlayer(state, sbPos);
+  }
+};
+
 // 开始新游戏
 export const startNewGame = (state: GameState): GameState => {
   const newState = { ...state };
@@ -103,15 +145,23 @@ export const startNewGame = (state: GameState): GameState => {
     status: 'waiting'
   }));
   
-  // 设置庄家位置
+  // 更新庄家位置
   newState.dealerPosition = (newState.dealerPosition + 1) % playerCount;
   
   // 更新所有玩家的位置名称
+  // 位置名称按照顺时针方向轮转：BTN -> SB -> BB -> UTG -> UTG+1 -> MP -> HJ -> CO
   newState.players = newState.players.map((player, index) => {
-    const relativePosition = (index - newState.dealerPosition + playerCount) % playerCount;
+    // 计算这个玩家相对于庄家的位置偏移
+    let relativePosition = (index - newState.dealerPosition + playerCount) % playerCount;
+    
+    // 将相对位置映射到位置名称
+    const positionNames: PositionName[] = ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'MP', 'HJ', 'CO'];
+    const positionName = positionNames[(relativePosition) % playerCount];
+    
     return {
       ...player,
-      positionName: getPositionName(relativePosition, playerCount)
+      position: index,
+      positionName: positionName
     };
   });
   
@@ -133,8 +183,8 @@ export const startNewGame = (state: GameState): GameState => {
   newState.deck = createDeck();
   newState.gamePhase = 'preflop';
   
-  // 设置第一个行动的玩家（大盲位后面的玩家）
-  newState.currentPlayer = (bbPos + 1) % playerCount;
+  // 设置第一个行动的玩家（翻牌前从UTG开始）
+  newState.currentPlayer = getFirstActionPosition(newState);
   newState.players[newState.currentPlayer].status = 'acting';
   
   // 发牌
@@ -255,17 +305,11 @@ export const nextGamePhase = (state: GameState): GameState => {
   newState.players.forEach(player => {
     if (player.isActive && player.status !== 'folded') {
       player.status = 'waiting';
+      player.currentBet = 0; // 清空当前下注
     }
   });
   
-  // 设置第一个行动的玩家
-  const firstPlayer = newState.players.findIndex(p => 
-    p.isActive && p.status !== 'folded'
-  );
-  if (firstPlayer !== -1) {
-    newState.currentPlayer = firstPlayer;
-    newState.players[firstPlayer].status = 'acting';
-  }
+  newState.currentBet = 0; // 清空当前最大下注
   
   switch (state.gamePhase) {
     case 'preflop':
@@ -289,6 +333,12 @@ export const nextGamePhase = (state: GameState): GameState => {
     case 'river':
       newState.gamePhase = 'showdown';
       break;
+  }
+  
+  // 设置第一个行动的玩家（翻牌后从小盲位开始）
+  if (newState.gamePhase !== 'showdown') {
+    newState.currentPlayer = getFirstActionPosition(newState);
+    newState.players[newState.currentPlayer].status = 'acting';
   }
   
   newState.deck = deck;
