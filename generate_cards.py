@@ -36,15 +36,15 @@ def create_card(rank, suit):
     create_rounded_rectangle(draw, (10, 10, CARD_WIDTH-10, CARD_HEIGHT-10), CORNER_RADIUS, WHITE)
     draw.rectangle([15, 15, CARD_WIDTH-15, CARD_HEIGHT-15], outline=BLACK, width=2)
     
-    # 设置字体
+    # 设置字体 - 增大字体大小
     try:
-        font_large = ImageFont.truetype("arial.ttf", 120)
-        font_small = ImageFont.truetype("arial.ttf", 60)
+        font_large = ImageFont.truetype("arial.ttf", 200)  # 增大中央花色的字体
+        font_small = ImageFont.truetype("arial.ttf", 100)  # 增大角落点数和花色的字体
     except:
         font_large = ImageFont.load_default()
         font_small = ImageFont.load_default()
     
-    # 确定颜色
+    # 确定颜色 - 使用更鲜明的颜色
     color = RED if suit in ['hearts', 'diamonds'] else BLACK
     
     # 绘制花色符号
@@ -55,14 +55,14 @@ def create_card(rank, suit):
         'spades': '♠'
     }
     
-    # 左上角和右下角的点数和花色
+    # 左上角和右下角的点数和花色 - 位置调整以适应更大的字体
     draw.text((30, 30), rank, fill=color, font=font_small)
-    draw.text((30, 90), suit_symbols[suit], fill=color, font=font_small)
-    draw.text((CARD_WIDTH-60, CARD_HEIGHT-120), rank, fill=color, font=font_small)
-    draw.text((CARD_WIDTH-60, CARD_HEIGHT-60), suit_symbols[suit], fill=color, font=font_small)
+    draw.text((30, 130), suit_symbols[suit], fill=color, font=font_small)
+    draw.text((CARD_WIDTH-130, CARD_HEIGHT-200), rank, fill=color, font=font_small)
+    draw.text((CARD_WIDTH-130, CARD_HEIGHT-100), suit_symbols[suit], fill=color, font=font_small)
     
-    # 中央的大号花色
-    draw.text((CARD_WIDTH//2-60, CARD_HEIGHT//2-60), suit_symbols[suit], fill=color, font=font_large)
+    # 中央的大号花色 - 位置调整以居中
+    draw.text((CARD_WIDTH//2-100, CARD_HEIGHT//2-100), suit_symbols[suit], fill=color, font=font_large)
     
     return img
 
@@ -74,10 +74,10 @@ def create_card_back():
     # 绘制圆角边框
     create_rounded_rectangle(draw, (10, 10, CARD_WIDTH-10, CARD_HEIGHT-10), CORNER_RADIUS, BLUE)
     
-    # 绘制花纹
-    for i in range(0, CARD_WIDTH, 30):
-        for j in range(0, CARD_HEIGHT, 30):
-            draw.rectangle([i, j, i+15, j+15], fill=WHITE)
+    # 绘制花纹 - 使用更大的花纹
+    for i in range(0, CARD_WIDTH, 50):  # 增大间距
+        for j in range(0, CARD_HEIGHT, 50):  # 增大间距
+            draw.rectangle([i, j, i+25, j+25], fill=WHITE)  # 增大花纹大小
     
     return img
 

@@ -12,12 +12,12 @@ const CommunityCards: React.FC<CommunityCardsProps> = ({ cards }) => {
   };
 
   return (
-    <HStack spacing={4} justify="center">
+    <HStack spacing={4} justify="center" w="100%">
       {cards.map((card, index) => (
         <Box
           key={index}
-          w="80px"
-          h="112px"
+          w="100px"
+          h="140px"
           borderWidth="1px"
           borderRadius="md"
           overflow="hidden"
@@ -37,8 +37,8 @@ const CommunityCards: React.FC<CommunityCardsProps> = ({ cards }) => {
       {Array.from({ length: 5 - cards.length }).map((_, index) => (
         <Box
           key={`empty-${index}`}
-          w="80px"
-          h="112px"
+          w="100px"
+          h="140px"
           borderWidth="1px"
           borderRadius="md"
           bg="whiteAlpha.300"

@@ -1,4 +1,4 @@
-import { Card, Suit, Rank, GameState, Player, Action, GameAction, PlayerStatus } from '../../types/poker';
+import { Card, Suit, Rank, GameState, Player, Action, GameAction, PlayerStatus, PositionName } from '../../types/poker';
 
 // 创建一副新牌
 export const createDeck = (): Card[] => {
@@ -25,12 +25,41 @@ export const shuffleDeck = (deck: Card[]): Card[] => {
   return shuffled;
 };
 
+// 根据位置索引获取位置名称
+export const getPositionName = (positionIndex: number, playerCount: number): PositionName => {
+  // 标准8人桌位置名称
+  // BTN (Button) - 庄家位
+  // SB (Small Blind) - 小盲位
+  // BB (Big Blind) - 大盲位
+  // UTG (Under The Gun) - 枪口位
+  // UTG+1 - 枪口位+1
+  // MP (Middle Position) - 中间位置
+  // HJ (Hijack) - 劫机位
+  // CO (Cut Off) - 切牌位
+  
+  // 按照德州扑克桌的布局，位置顺序为：
+  // 0: BTN (庄家位)
+  // 1: SB (小盲位)
+  // 2: BB (大盲位)
+  // 3: UTG (枪口位)
+  // 4: UTG+1 (枪口位+1)
+  // 5: MP (中间位置)
+  // 6: HJ (劫机位)
+  // 7: CO (切牌位)
+  
+  const positionNames: PositionName[] = ['BTN', 'SB', 'BB', 'UTG', 'UTG+1', 'MP', 'HJ', 'CO'];
+  
+  // 根据位置索引获取位置名称
+  return positionNames[positionIndex % playerCount];
+};
+
 // 初始化游戏状态
 export const initializeGameState = (): GameState => {
   const players: Player[] = [];
+  const playerCount = 8;
   
   // 创建一个人类玩家和7个AI玩家
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < playerCount; i++) {
     players.push({
       id: i,
       name: i === 0 ? 'Player' : `AI ${i}`,
@@ -38,6 +67,7 @@ export const initializeGameState = (): GameState => {
       cards: [],
       isHuman: i === 0,
       position: i,
+      positionName: getPositionName(i, playerCount),
       currentBet: 0,
       isActive: true,
       status: 'waiting'
@@ -62,6 +92,7 @@ export const initializeGameState = (): GameState => {
 // 开始新游戏
 export const startNewGame = (state: GameState): GameState => {
   const newState = { ...state };
+  const playerCount = newState.players.length;
   
   // 重置所有玩家状态
   newState.players = newState.players.map(player => ({
@@ -73,11 +104,20 @@ export const startNewGame = (state: GameState): GameState => {
   }));
   
   // 设置庄家位置
-  newState.dealerPosition = (newState.dealerPosition + 1) % 8;
+  newState.dealerPosition = (newState.dealerPosition + 1) % playerCount;
+  
+  // 更新所有玩家的位置名称
+  newState.players = newState.players.map((player, index) => {
+    const relativePosition = (index - newState.dealerPosition + playerCount) % playerCount;
+    return {
+      ...player,
+      positionName: getPositionName(relativePosition, playerCount)
+    };
+  });
   
   // 设置小盲和大盲位置
-  const sbPos = (newState.dealerPosition + 1) % 8;
-  const bbPos = (newState.dealerPosition + 2) % 8;
+  const sbPos = (newState.dealerPosition + 1) % playerCount;
+  const bbPos = (newState.dealerPosition + 2) % playerCount;
   
   // 收取盲注
   newState.players[sbPos].chips -= newState.smallBlind;
@@ -94,7 +134,7 @@ export const startNewGame = (state: GameState): GameState => {
   newState.gamePhase = 'preflop';
   
   // 设置第一个行动的玩家（大盲位后面的玩家）
-  newState.currentPlayer = (bbPos + 1) % 8;
+  newState.currentPlayer = (bbPos + 1) % playerCount;
   newState.players[newState.currentPlayer].status = 'acting';
   
   // 发牌

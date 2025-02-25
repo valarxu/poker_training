@@ -10,6 +10,9 @@ export type Action = 'fold' | 'call' | 'raise';
 
 export type PlayerStatus = 'waiting' | 'acting' | 'folded' | 'called' | 'raised';
 
+// 德州扑克标准位置名称
+export type PositionName = 'BTN' | 'SB' | 'BB' | 'UTG' | 'UTG+1' | 'MP' | 'HJ' | 'CO';
+
 export interface Player {
   id: number;
   name: string;
@@ -17,6 +20,7 @@ export interface Player {
   cards: Card[];
   isHuman: boolean;
   position: number; // 0-7, 0 being the dealer
+  positionName: PositionName; // 位置名称
   currentBet: number;
   isActive: boolean;
   status: PlayerStatus;
