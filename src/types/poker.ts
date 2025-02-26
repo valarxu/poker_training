@@ -6,9 +6,9 @@ export interface Card {
   rank: Rank;
 }
 
-export type Action = 'fold' | 'call' | 'raise';
+export type Action = 'fold' | 'call' | 'raise' | 'all-in';
 
-export type PlayerStatus = 'waiting' | 'acting' | 'folded' | 'called' | 'raised';
+export type PlayerStatus = 'waiting' | 'acting' | 'folded' | 'called' | 'raised' | 'all-in';
 
 // 德州扑克标准位置名称
 export type PositionName = 'BTN' | 'SB' | 'BB' | 'UTG' | 'UTG+1' | 'MP' | 'HJ' | 'CO';
@@ -28,6 +28,19 @@ export interface Player {
 
 export type GamePhase = 'not_started' | 'preflop' | 'flop' | 'turn' | 'river' | 'showdown';
 
+// 摊牌结果接口
+export interface HandRankResult {
+  playerId: number;
+  handRank: number;
+  handStrength: number;
+  bestHand?: Card[];
+}
+
+export interface ShowdownResult {
+  winners: number[];
+  handRanks: HandRankResult[];
+}
+
 export interface GameState {
   isGameStarted: boolean;
   players: Player[];
@@ -45,6 +58,8 @@ export interface GameState {
     type: Action;
     amount?: number;
   };
+  lastRaisePlayerId?: number; // 记录最后一个加注的玩家ID
+  showdownResults?: ShowdownResult; // 摊牌结果
 }
 
 export interface GameAction {

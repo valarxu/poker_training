@@ -104,7 +104,7 @@ const getGroups = (ranks: number[]): { pairs: number[], trips: number[], quads: 
 };
 
 // 评估最终牌力
-export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank: HandRank, strength: number } => {
+export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank: HandRank, strength: number, bestHand?: Card[] } => {
   const allCards = [...holeCards, ...communityCards];
   if (allCards.length < 2) return { rank: HandRank.HighCard, strength: 0 };
   
@@ -112,7 +112,8 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
   if (allCards.length === 2) {
     return {
       rank: HandRank.HighCard,
-      strength: calculateStartingHandStrength(holeCards)
+      strength: calculateStartingHandStrength(holeCards),
+      bestHand: holeCards
     };
   }
   
@@ -125,23 +126,61 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
     if (sameSuitCards.length >= 5) {
       const sameSuitRanks = sameSuitCards.map(card => rankValues[card.rank]);
       if (isStraight(sameSuitRanks)) {
-        const maxRank = Math.max(...sameSuitRanks);
-        if (maxRank === 14) {
-          return { rank: HandRank.RoyalFlush, strength: 1 };
+        // 找出同花顺的五张牌
+        const sortedCards = [...sameSuitCards].sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
+        
+        // 处理A2345的特殊情况
+        if (sortedCards.some(card => card.rank === 'A') && 
+            sortedCards.some(card => card.rank === '2') && 
+            sortedCards.some(card => card.rank === '3') && 
+            sortedCards.some(card => card.rank === '4') && 
+            sortedCards.some(card => card.rank === '5')) {
+          const ace = sortedCards.find(card => card.rank === 'A')!;
+          const two = sortedCards.find(card => card.rank === '2')!;
+          const three = sortedCards.find(card => card.rank === '3')!;
+          const four = sortedCards.find(card => card.rank === '4')!;
+          const five = sortedCards.find(card => card.rank === '5')!;
+          const bestHand = [ace, two, three, four, five];
+          
+          if (ace.rank === 'A') {
+            return { rank: HandRank.StraightFlush, strength: 0.95, bestHand };
+          }
         }
-        return { rank: HandRank.StraightFlush, strength: 0.95 + (maxRank / 300) };
+        
+        // 常规同花顺
+        const maxRank = Math.max(...sameSuitRanks);
+        const bestHand = sortedCards.slice(0, 5);
+        
+        if (maxRank === 14 && bestHand.some(card => card.rank === 'K')) {
+          return { rank: HandRank.RoyalFlush, strength: 1, bestHand };
+        }
+        return { rank: HandRank.StraightFlush, strength: 0.95 + (maxRank / 300), bestHand };
       }
     }
   }
   
   // 四条
   if (groups.quads.length > 0) {
-    return { rank: HandRank.FourOfAKind, strength: 0.9 + (Math.max(...groups.quads) / 140) };
+    const quadRank = Math.max(...groups.quads);
+    const quadCards = allCards.filter(card => rankValues[card.rank] === quadRank);
+    const kickers = allCards
+      .filter(card => rankValues[card.rank] !== quadRank)
+      .sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
+    
+    const bestHand = [...quadCards, kickers[0]];
+    return { rank: HandRank.FourOfAKind, strength: 0.9 + (quadRank / 140), bestHand };
   }
   
   // 葫芦
   if (groups.trips.length > 0 && groups.pairs.length > 0) {
-    return { rank: HandRank.FullHouse, strength: 0.85 + (Math.max(...groups.trips) / 140) };
+    const tripRank = Math.max(...groups.trips);
+    const tripCards = allCards.filter(card => rankValues[card.rank] === tripRank);
+    
+    const pairRank = Math.max(...groups.pairs);
+    const pairCards = allCards.filter(card => rankValues[card.rank] === pairRank);
+    
+    const bestHand = [...tripCards, ...pairCards.slice(0, 2)];
+    return { rank: HandRank.FullHouse, strength: 0.85 + (tripRank / 140), bestHand };
   }
   
   // 同花
@@ -149,34 +188,93 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
     allCards.filter(c => c.suit === card.suit).length >= 5
   )?.suit;
   if (flushSuit) {
-    const flushCards = allCards.filter(card => card.suit === flushSuit);
-    const maxRank = Math.max(...flushCards.map(card => rankValues[card.rank]));
-    return { rank: HandRank.Flush, strength: 0.8 + (maxRank / 140) };
+    const flushCards = allCards
+      .filter(card => card.suit === flushSuit)
+      .sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
+    
+    const bestHand = flushCards.slice(0, 5);
+    const maxRank = Math.max(...bestHand.map(card => rankValues[card.rank]));
+    return { rank: HandRank.Flush, strength: 0.8 + (maxRank / 140), bestHand };
   }
   
   // 顺子
   if (isStraight(ranks)) {
-    const maxRank = Math.max(...ranks);
-    return { rank: HandRank.Straight, strength: 0.75 + (maxRank / 140) };
+    // 找出顺子的五张牌
+    const uniqueRanks = Array.from(new Set(ranks)).sort((a, b) => a - b);
+    
+    // 处理A2345的特殊情况
+    if (uniqueRanks.includes(14) && uniqueRanks.includes(2) && uniqueRanks.includes(3) && 
+        uniqueRanks.includes(4) && uniqueRanks.includes(5)) {
+      const ace = allCards.find(card => card.rank === 'A')!;
+      const two = allCards.find(card => card.rank === '2')!;
+      const three = allCards.find(card => card.rank === '3')!;
+      const four = allCards.find(card => card.rank === '4')!;
+      const five = allCards.find(card => card.rank === '5')!;
+      
+      const bestHand = [ace, two, three, four, five];
+      return { rank: HandRank.Straight, strength: 0.75, bestHand };
+    }
+    
+    // 常规顺子
+    for (let i = uniqueRanks.length - 1; i >= 4; i--) {
+      if (uniqueRanks[i] - uniqueRanks[i-4] === 4) {
+        const straightRanks = uniqueRanks.slice(i-4, i+1);
+        const bestHand = straightRanks.map(rank => 
+          allCards.find(card => rankValues[card.rank] === rank)!
+        );
+        
+        const maxRank = Math.max(...straightRanks);
+        return { rank: HandRank.Straight, strength: 0.75 + (maxRank / 140), bestHand };
+      }
+    }
   }
   
   // 三条
   if (groups.trips.length > 0) {
-    return { rank: HandRank.ThreeOfAKind, strength: 0.7 + (Math.max(...groups.trips) / 140) };
+    const tripRank = Math.max(...groups.trips);
+    const tripCards = allCards.filter(card => rankValues[card.rank] === tripRank);
+    
+    const kickers = allCards
+      .filter(card => rankValues[card.rank] !== tripRank)
+      .sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
+    
+    const bestHand = [...tripCards, ...kickers.slice(0, 2)];
+    return { rank: HandRank.ThreeOfAKind, strength: 0.7 + (tripRank / 140), bestHand };
   }
   
   // 两对
   if (groups.pairs.length >= 2) {
-    const [high, low] = groups.pairs.sort((a, b) => b - a);
-    return { rank: HandRank.TwoPair, strength: 0.6 + (high / 140) + (low / 1400) };
+    const sortedPairs = [...groups.pairs].sort((a, b) => b - a);
+    const [highPairRank, lowPairRank] = sortedPairs;
+    
+    const highPairCards = allCards.filter(card => rankValues[card.rank] === highPairRank);
+    const lowPairCards = allCards.filter(card => rankValues[card.rank] === lowPairRank);
+    
+    const kickers = allCards
+      .filter(card => rankValues[card.rank] !== highPairRank && rankValues[card.rank] !== lowPairRank)
+      .sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
+    
+    const bestHand = [...highPairCards, ...lowPairCards, kickers[0]];
+    return { rank: HandRank.TwoPair, strength: 0.6 + (highPairRank / 140) + (lowPairRank / 1400), bestHand };
   }
   
   // 一对
   if (groups.pairs.length === 1) {
-    return { rank: HandRank.Pair, strength: 0.5 + (groups.pairs[0] / 140) };
+    const pairRank = groups.pairs[0];
+    const pairCards = allCards.filter(card => rankValues[card.rank] === pairRank);
+    
+    const kickers = allCards
+      .filter(card => rankValues[card.rank] !== pairRank)
+      .sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
+    
+    const bestHand = [...pairCards, ...kickers.slice(0, 3)];
+    return { rank: HandRank.Pair, strength: 0.5 + (pairRank / 140), bestHand };
   }
   
   // 高牌
-  const maxRank = Math.max(...ranks);
-  return { rank: HandRank.HighCard, strength: 0.4 + (maxRank / 140) };
+  const sortedCards = [...allCards].sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
+  const bestHand = sortedCards.slice(0, 5);
+  const maxRank = Math.max(...bestHand.map(card => rankValues[card.rank]));
+  
+  return { rank: HandRank.HighCard, strength: 0.4 + (maxRank / 140), bestHand };
 }; 

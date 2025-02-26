@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Box, Grid, Text, Button, VStack, HStack, Center, Flex } from '@chakra-ui/react';
-import { GameState, Player, GameAction } from '../../types/poker';
-import { initializeGameState, startNewGame, handleAction, nextGamePhase, startNewRound, isRoundComplete } from '../../utils/poker/gameLogic';
+import { GameState, Player, PlayerStatus, GamePhase, GameAction } from '../../types/poker';
+import { initializeGameState, startNewGame, handleAction, nextGamePhase, startNewRound, isRoundComplete, findNextActivePlayerFromPosition } from '../../utils/poker/gameLogic';
 import { getAIAction } from '../../utils/ai/aiLogic';
 import PlayerComponent from '../Player/PlayerComponent';
 import CommunityCards from '../Cards/CommunityCards';
@@ -14,7 +14,13 @@ const PokerTable: React.FC = () => {
   
   // 开始新游戏
   const handleStartGame = () => {
-    setGameState(startNewGame(gameState));
+    // 如果当前是摊牌阶段，则开始新的一轮
+    if (gameState.gamePhase === 'showdown') {
+      setGameState(startNewRound(gameState));
+    } else {
+      // 否则开始新游戏
+      setGameState(startNewGame(gameState));
+    }
   };
   
   // 处理玩家行动
@@ -32,10 +38,10 @@ const PokerTable: React.FC = () => {
     
     if (!currentPlayer.isHuman && currentPlayer.isActive && currentPlayer.status === 'acting') {
       setIsAiThinking(true);
-      setAiThinkingTime(5);
+      setAiThinkingTime(2);
       
       // 启动5秒倒计时
-      for (let i = 5; i > 0; i--) {
+      for (let i = 2; i > 0; i--) {
         setAiThinkingTime(i);
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
@@ -50,12 +56,23 @@ const PokerTable: React.FC = () => {
   // 检查当前回合是否结束
   const checkRoundEnd = () => {
     if (isRoundComplete(gameState)) {
-      if (gameState.gamePhase === 'showdown') {
-        // TODO: 实现牌力比较和胜者判定
-        setGameState(startNewRound(gameState));
-      } else {
+      if (gameState.gamePhase === 'river') {
+        // 河牌阶段结束后，进入摊牌阶段，但不自动开始新的一轮
+        const newState = nextGamePhase(gameState);
+        // 确保在摊牌阶段所有玩家的牌都可见
+        if (newState.gamePhase === 'showdown') {
+          setGameState({
+            ...newState,
+            isGameStarted: true // 保持游戏状态为已开始，这样不会自动开始新游戏
+          });
+        } else {
+          setGameState(newState);
+        }
+      } else if (gameState.gamePhase !== 'showdown') {
+        // 其他阶段结束后，正常进入下一阶段
         setGameState(nextGamePhase(gameState));
       }
+      // 摊牌阶段不自动进入下一轮，等待玩家点击"开始游戏"按钮
     }
   };
   
@@ -68,20 +85,49 @@ const PokerTable: React.FC = () => {
   useEffect(() => {
     if (gameState.isGameStarted) {
       checkRoundEnd();
-      const currentPlayer = gameState.players[gameState.currentPlayer];
-      setIsPlayerTurn(currentPlayer.isHuman && currentPlayer.status === 'acting');
+      // 检查currentPlayer是否有效
+      if (gameState.currentPlayer >= 0 && gameState.currentPlayer < gameState.players.length) {
+        const currentPlayer = gameState.players[gameState.currentPlayer];
+        setIsPlayerTurn(currentPlayer.isHuman && currentPlayer.status === 'acting');
+      } else {
+        // 如果currentPlayer无效，检查是否需要进入下一阶段
+        if (gameState.gamePhase !== 'showdown') {
+          setGameState(nextGamePhase(gameState));
+        }
+        // 摊牌阶段不自动开始新的一轮
+      }
     }
-  }, [gameState.currentPlayer, gameState.players[gameState.currentPlayer].status]);
+  }, [gameState.currentPlayer, gameState.players, gameState.gamePhase]);
+  
+  // 获取游戏阶段的文本描述
+  const getGamePhaseText = (phase: GamePhase): string => {
+    switch (phase) {
+      case 'not_started':
+        return '等待开始';
+      case 'preflop':
+        return '翻牌前';
+      case 'flop':
+        return '翻牌';
+      case 'turn':
+        return '转牌';
+      case 'river':
+        return '河牌';
+      case 'showdown':
+        return '摊牌';
+      default:
+        return '未知阶段';
+    }
+  };
   
   // 玩家操作按钮
   const ActionButtons = () => (
     <VStack spacing={4}>
-      {!gameState.isGameStarted ? (
+      {!gameState.isGameStarted || gameState.gamePhase === 'showdown' ? (
         <Button
           colorScheme="green"
           onClick={handleStartGame}
         >
-          开始游戏
+          {gameState.gamePhase === 'showdown' ? '开始新一轮' : '开始游戏'}
         </Button>
       ) : (
         <>
@@ -123,25 +169,26 @@ const PokerTable: React.FC = () => {
     </VStack>
   );
   
-  // 获取玩家在桌子上的位置
-  const getPlayerPosition = (index: number) => {
-    // 人类玩家固定在bottom-right位置
-    if (gameState.players[index].isHuman) {
-      return { gridArea: "bottom-right" };
-    }
-    
-    // AI玩家按顺时针顺序排列
-    // 假设玩家在位置0，其他位置按顺时针排列
+  // 获取玩家位置的网格区域，调整布局避免被公共牌和摊牌结果遮挡
+  const getPlayerPosition = (index: number): { gridArea: string } => {
+    // 按照顺时针顺序排列位置，调整位置避免遮挡
     const positions = [
-      "bottom-left",  // 1号位
-      "left-bottom", // 2号位
-      "left-top",    // 3号位
-      "top-left",    // 4号位
-      "top-right",   // 5号位
-      "right-top",   // 6号位
-      "right-bottom" // 7号位
+      { gridArea: 'bottom-right' }, // 玩家位置（人类玩家）
+      { gridArea: 'bottom-right-center' },
+      { gridArea: 'bottom-left-center' },
+      { gridArea: 'bottom-left' },
+      { gridArea: 'top-left' },
+      { gridArea: 'top-left-center' },
+      { gridArea: 'top-right-center' },
+      { gridArea: 'top-right' }
     ];
     
+    // 如果是人类玩家，固定在bottom-right位置
+    if (gameState.players[index].isHuman) {
+      return positions[0];
+    }
+    
+    // 计算AI玩家的位置
     // 找出这个AI是第几个AI（跳过人类玩家）
     let aiIndex = 0;
     for (let i = 0; i < index; i++) {
@@ -150,95 +197,174 @@ const PokerTable: React.FC = () => {
       }
     }
     
-    return { gridArea: positions[aiIndex] };
+    // 返回对应的位置
+    return positions[aiIndex + 1]; // +1是因为第0个位置是给人类玩家的
+  };
+  
+  // 添加ShowdownResults组件，调整位置避免遮挡玩家
+  const ShowdownResults = () => {
+    if (!gameState.showdownResults) return null;
+    
+    return (
+      <Box
+        position="absolute"
+        top="10%"
+        left="50%"
+        transform="translateX(-50%)"
+        bg="rgba(0, 0, 0, 0.8)"
+        color="white"
+        p={4}
+        borderRadius="md"
+        zIndex={10}
+        maxW="300px"
+        textAlign="center"
+        boxShadow="dark-lg"
+      >
+        <Text fontSize="xl" fontWeight="bold" mb={4}>
+          摊牌结果
+        </Text>
+        
+        <VStack spacing={3} align="stretch">
+          <Text fontSize="lg" color="yellow.300">
+            赢家: {gameState.showdownResults?.winners.map(id => 
+              gameState.players.find(p => p.id === id)?.name
+            ).join(', ')}
+          </Text>
+          
+          <Text fontSize="md" mb={2}>
+            赢得: {gameState.pot} BB
+          </Text>
+          
+          {gameState.showdownResults?.handRanks.map((result, index) => {
+            const player = gameState.players.find(p => p.id === result.playerId);
+            if (!player) return null;
+            
+            // 获取手牌等级的文本描述
+            const getHandRankText = (rank: number) => {
+              const ranks = [
+                '高牌', '一对', '两对', '三条', 
+                '顺子', '同花', '葫芦', '四条', 
+                '同花顺', '皇家同花顺'
+              ];
+              return ranks[rank] || '未知';
+            };
+            
+            return (
+              <Box 
+                key={index} 
+                p={2} 
+                bg={gameState.showdownResults?.winners.includes(result.playerId) 
+                  ? "green.800" 
+                  : "gray.800"
+                }
+                borderRadius="md"
+                borderWidth={gameState.showdownResults?.winners.includes(result.playerId) ? "1px" : "0"}
+                borderColor="yellow.400"
+              >
+                <Text fontWeight="bold">
+                  {player.name}: {getHandRankText(result.handRank)}
+                </Text>
+              </Box>
+            );
+          })}
+        </VStack>
+        
+        <Text fontSize="sm" mt={4} color="gray.400">
+          点击"开始新一轮"继续游戏
+        </Text>
+      </Box>
+    );
   };
   
   return (
-    <Box
-      w="100vw"
-      h="100vh"
-      bg="green.700"
-      p={8}
-    >
-      <Center>
-        <VStack spacing={4}>
-          {/* 方形扑克桌布局 */}
+    <Box h="100vh" bg="green.700" position="relative">
+      <Center h="100%">
+        <VStack spacing={4} w="100%" maxW="1280px">
           <Box
-            w="1440px"
-            h="1050px"
-            position="relative"
+            w="100%"
+            h="80vh"
             bg="green.600"
             borderRadius="xl"
             boxShadow="xl"
-            p={8}
+            position="relative"
+            p={4}
+            display="grid"
+            gridTemplateAreas={`
+              "top-left top-left-center . top-right-center top-right"
+              ". . center . ."
+              "bottom-left bottom-left-center . bottom-right-center bottom-right"
+            `}
+            gridTemplateRows="1fr 1fr 1fr"
+            gridTemplateColumns="1fr 1fr 1fr 1fr 1fr"
+            gap={4}
           >
-            {/* 中央区域 - 公共牌 */}
-            <Center
-              position="absolute"
-              top="50%"
-              left="50%"
-              transform="translate(-50%, -50%)"
-              w="600px"
-              h="400px"
-              bg="green.500"
-              borderRadius="lg"
-              p={4}
-              zIndex={1}
-              flexDirection="column"
-            >
-              {/* 底池和回合信息放在公共牌上方 */}
-              <VStack spacing={2} mb={4}>
-                <Text color="white" fontSize="2xl">
-                  底池: {gameState.pot} BB
-                </Text>
-                
-                <Text color="white" fontSize="lg">
-                  {gameState.gamePhase === 'not_started' ? '等待开始' :
-                   gameState.gamePhase === 'preflop' ? '翻牌前' :
-                   gameState.gamePhase === 'flop' ? '翻牌' :
-                   gameState.gamePhase === 'turn' ? '转牌' :
-                   gameState.gamePhase === 'river' ? '河牌' : '摊牌'}
-                </Text>
-              </VStack>
-              
-              {/* 公共牌 */}
-              <CommunityCards cards={gameState.communityCards} />
-              
-              {/* 操作按钮放在公共牌下方 */}
-              <Box mt={4} zIndex={2}>
-                <ActionButtons />
-              </Box>
-            </Center>
+            {/* 游戏信息 */}
+            <HStack justify="space-between" w="100%" position="absolute" top="0" left="0" p={4}>
+              <Text color="white" fontSize="xl">
+                阶段: {getGamePhaseText(gameState.gamePhase)}
+              </Text>
+              <Text color="white" fontSize="xl">
+                底池: {gameState.pot} BB
+              </Text>
+            </HStack>
             
-            {/* 玩家位置 - 使用Grid布局 */}
-            <Grid
-              templateAreas={`
-                ".           top-left     top-right    ."
-                "left-top    .            .            right-top"
-                "left-bottom .            .            right-bottom"
-                ".           bottom-left  bottom-right ."
-              `}
-              gridTemplateRows="220px 220px 220px 220px"
-              gridTemplateColumns="320px 320px 320px 320px"
-              h="100%"
-              w="100%"
-              gap={8}
+            {/* 公共牌 - 放在中央，但调整位置避免遮挡玩家 */}
+            <Box 
+              position="absolute" 
+              top="40%" 
+              left="50%" 
+              transform="translate(-50%, -50%)" 
+              zIndex={2}
+              bg="green.500"
+              p={4}
+              borderRadius="md"
+              boxShadow="lg"
+              width="600px"
+              borderWidth="2px"
+              borderColor="green.300"
+              gridArea="center"
             >
-              {gameState.players.map((player, index) => (
-                <Box
-                  key={player.id}
-                  {...getPlayerPosition(index)}
-                  width="100%"
-                  height="100%"
-                >
-                  <PlayerComponent
-                    player={player}
-                    isCurrentPlayer={gameState.currentPlayer === index}
-                    isCurrent={isPlayerTurn && player.isHuman}
-                  />
-                </Box>
-              ))}
-            </Grid>
+              <VStack>
+                <HStack justify="space-between" w="100%" mb={2}>
+                  <Text color="white" fontSize="lg" fontWeight="bold">
+                    公共牌
+                  </Text>
+                  <Text color="white" fontSize="lg">
+                    {gameState.gamePhase === 'not_started' ? '等待开始' :
+                     gameState.gamePhase === 'preflop' ? '翻牌前' :
+                     gameState.gamePhase === 'flop' ? '翻牌' :
+                     gameState.gamePhase === 'turn' ? '转牌' :
+                     gameState.gamePhase === 'river' ? '河牌' : '摊牌'}
+                  </Text>
+                </HStack>
+                <CommunityCards cards={gameState.communityCards} />
+              </VStack>
+            </Box>
+            
+            {/* 玩家组件 */}
+            {gameState.players.map((player, index) => (
+              <Box
+                key={player.id}
+                {...getPlayerPosition(index)}
+                height="150px"
+              >
+                <PlayerComponent
+                  player={player}
+                  position={player.position}
+                  isCurrentPlayer={gameState.currentPlayer === index}
+                  isDealer={index === gameState.dealerPosition}
+                  gamePhase={gameState.gamePhase}
+                />
+              </Box>
+            ))}
+            
+            {/* 摊牌结果 */}
+            {gameState.gamePhase === 'showdown' && <ShowdownResults />}
+            
+            {/* 玩家操作按钮 */}
+            <Box position="absolute" bottom="20px" left="50%" transform="translateX(-50%)">
+              <ActionButtons />
+            </Box>
           </Box>
         </VStack>
       </Center>

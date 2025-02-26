@@ -28,6 +28,17 @@ const calculateEffectiveStack = (state: GameState, player: Player): number => {
   return Math.min(player.chips, minOtherStack);
 };
 
+// 将金额调整为0.5BB的整数倍
+const roundToBBMultiple = (amount: number, smallBlind: number): number => {
+  // 一个大盲注等于两个小盲注
+  const bbUnit = smallBlind * 2;
+  // 最小单位是0.5BB，即一个小盲注
+  const minUnit = smallBlind;
+  
+  // 将金额除以最小单位，四舍五入，然后再乘以最小单位
+  return Math.round(amount / minUnit) * minUnit;
+};
+
 // 计算加注大小
 const calculateRaiseAmount = (state: GameState, player: Player, handStrength: number): number => {
   const effectiveStack = calculateEffectiveStack(state, player);
@@ -35,19 +46,30 @@ const calculateRaiseAmount = (state: GameState, player: Player, handStrength: nu
   const minRaise = state.currentBet * 2;
   
   // 根据手牌强度和底池大小计算加注
+  let raiseAmount = minRaise;
+  
   if (handStrength > 0.9) {
-    // 超强牌，加注3-4倍底池
-    return Math.min(potSize * (3 + Math.random()), effectiveStack);
+    // 超强牌，加注0.8倍底池
+    raiseAmount = state.currentBet + potSize * 0.8;
   } else if (handStrength > 0.8) {
-    // 强牌，加注2-3倍底池
-    return Math.min(potSize * (2 + Math.random()), effectiveStack);
+    // 强牌，加注0.6倍底池
+    raiseAmount = state.currentBet + potSize * 0.6;
   } else if (handStrength > 0.7) {
-    // 中强牌，加注1.5-2倍底池
-    return Math.min(potSize * (1.5 + Math.random() * 0.5), effectiveStack);
+    // 中强牌，加注0.4倍底池
+    raiseAmount = state.currentBet + potSize * 0.4;
   } else {
-    // 普通牌，最小加注
-    return minRaise;
+    // 普通牌，加注0.2倍底池
+    raiseAmount = state.currentBet + potSize * 0.2;
   }
+  
+  // 确保加注金额不小于最小加注
+  raiseAmount = Math.max(raiseAmount, minRaise);
+  
+  // 确保加注金额不超过玩家筹码
+  raiseAmount = Math.min(raiseAmount, player.chips + player.currentBet);
+  
+  // 将加注金额调整为0.5BB的整数倍
+  return roundToBBMultiple(raiseAmount, state.smallBlind);
 };
 
 // GTO策略决策
@@ -63,6 +85,20 @@ const makeGTODecision = (
   
   // 调整手牌强度，考虑位置权重
   const adjustedStrength = handStrength * positionWeight;
+  
+  // 如果玩家筹码不足以跟注，只能选择ALL IN或弃牌
+  if (player.chips < state.currentBet - player.currentBet) {
+    // 如果手牌足够强，选择ALL IN
+    if (adjustedStrength > potOdds * 1.2) {
+      return {
+        type: 'all-in',
+        playerId,
+        amount: player.chips + player.currentBet
+      };
+    } else {
+      return { type: 'fold', playerId };
+    }
+  }
   
   // 翻前策略
   if (state.gamePhase === 'preflop') {
