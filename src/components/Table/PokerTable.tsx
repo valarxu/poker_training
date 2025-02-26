@@ -9,6 +9,8 @@ import CommunityCards from '../Cards/CommunityCards';
 const PokerTable: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(initializeGameState());
   const [isPlayerTurn, setIsPlayerTurn] = useState(false);
+  const [aiThinkingTime, setAiThinkingTime] = useState<number>(0);
+  const [isAiThinking, setIsAiThinking] = useState(false);
   
   // 开始新游戏
   const handleStartGame = () => {
@@ -29,12 +31,19 @@ const PokerTable: React.FC = () => {
     const currentPlayer = gameState.players[gameState.currentPlayer];
     
     if (!currentPlayer.isHuman && currentPlayer.isActive && currentPlayer.status === 'acting') {
+      setIsAiThinking(true);
+      setAiThinkingTime(5);
+      
+      // 启动5秒倒计时
+      for (let i = 5; i > 0; i--) {
+        setAiThinkingTime(i);
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      }
+      
       const aiAction = getAIAction(gameState, gameState.currentPlayer);
       const newState = handleAction(gameState, aiAction);
       setGameState(newState);
-      
-      // 模拟AI思考时间
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      setIsAiThinking(false);
     }
   };
   
@@ -51,10 +60,10 @@ const PokerTable: React.FC = () => {
   };
   
   useEffect(() => {
-    if (gameState.isGameStarted && !isPlayerTurn) {
+    if (gameState.isGameStarted && !isPlayerTurn && !isAiThinking) {
       handleAITurn();
     }
-  }, [isPlayerTurn, gameState.currentPlayer]);
+  }, [isPlayerTurn, gameState.currentPlayer, isAiThinking]);
   
   useEffect(() => {
     if (gameState.isGameStarted) {
@@ -66,7 +75,7 @@ const PokerTable: React.FC = () => {
   
   // 玩家操作按钮
   const ActionButtons = () => (
-    <HStack spacing={4} mt={4}>
+    <VStack spacing={4}>
       {!gameState.isGameStarted ? (
         <Button
           colorScheme="green"
@@ -76,34 +85,42 @@ const PokerTable: React.FC = () => {
         </Button>
       ) : (
         <>
-          <Button
-            colorScheme="red"
-            onClick={() => handlePlayerAction({ type: 'fold', playerId: 0 })}
-            isDisabled={!isPlayerTurn}
-          >
-            弃牌
-          </Button>
-          <Button
-            colorScheme="blue"
-            onClick={() => handlePlayerAction({ type: 'call', playerId: 0 })}
-            isDisabled={!isPlayerTurn}
-          >
-            跟注
-          </Button>
-          <Button
-            colorScheme="green"
-            onClick={() => handlePlayerAction({
-              type: 'raise',
-              playerId: 0,
-              amount: gameState.currentBet * 2
-            })}
-            isDisabled={!isPlayerTurn}
-          >
-            加注
-          </Button>
+          <HStack spacing={4}>
+            <Button
+              colorScheme="red"
+              onClick={() => handlePlayerAction({ type: 'fold', playerId: 0 })}
+              isDisabled={!isPlayerTurn}
+            >
+              弃牌
+            </Button>
+            <Button
+              colorScheme="blue"
+              onClick={() => handlePlayerAction({ type: 'call', playerId: 0 })}
+              isDisabled={!isPlayerTurn}
+            >
+              跟注
+            </Button>
+            <Button
+              colorScheme="green"
+              onClick={() => handlePlayerAction({
+                type: 'raise',
+                playerId: 0,
+                amount: gameState.currentBet * 2
+              })}
+              isDisabled={!isPlayerTurn}
+            >
+              加注
+            </Button>
+          </HStack>
+          
+          {isAiThinking && (
+            <Text color="yellow.300" fontSize="lg">
+              AI思考中... {aiThinkingTime}秒
+            </Text>
+          )}
         </>
       )}
-    </HStack>
+    </VStack>
   );
   
   // 获取玩家在桌子上的位置
