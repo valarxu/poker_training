@@ -392,25 +392,24 @@ export const isRoundComplete = (state: GameState): boolean => {
     const lastRaisePlayerIndex = state.players.findIndex(p => p.id === state.lastRaisePlayerId);
     let nextPlayerIndex = (lastRaisePlayerIndex + 1) % state.players.length;
     let foundNextActivePlayer = false;
+    let completedFullCircle = false;
     
     // 循环查找下一个活跃玩家
     while (nextPlayerIndex !== lastRaisePlayerIndex) {
       const nextPlayer = state.players[nextPlayerIndex];
       if (nextPlayer.isActive && nextPlayer.status !== 'folded' && nextPlayer.status !== 'all-in') {
         foundNextActivePlayer = true;
+        // 检查是否已经回到了当前玩家，表示已经完成了一个完整的圈
+        if (nextPlayerIndex === state.currentPlayer) {
+          completedFullCircle = true;
+        }
         break;
       }
       nextPlayerIndex = (nextPlayerIndex + 1) % state.players.length;
     }
     
-    // 如果没有找到下一个活跃玩家，或者所有玩家都已经行动且下注相等，回合结束
-    if (!foundNextActivePlayer || (allActed && betsEqual)) {
-      return true;
-    }
-    
-    // 检查是否已经回到了最后加注玩家
-    // 如果当前玩家是最后加注玩家，且所有玩家都已经行动且下注相等，回合结束
-    if (state.currentPlayer === state.lastRaisePlayerId && allActed && betsEqual) {
+    // 如果没有找到下一个活跃玩家，或者已经完成了一个完整的圈且所有玩家都已经行动且下注相等，回合结束
+    if (!foundNextActivePlayer || (completedFullCircle && allActed && betsEqual)) {
       return true;
     }
   }
@@ -443,7 +442,8 @@ export const handleShowdown = (state: GameState): GameState => {
         handRanks: [{
           playerId: winner.id,
           handRank: 0,
-          handStrength: 0
+          handStrength: 0,
+          winAmount: state.pot // 添加赢得金额
         }]
       }
     };
@@ -456,7 +456,8 @@ export const handleShowdown = (state: GameState): GameState => {
       playerId: player.id,
       handRank: evaluation.rank,
       handStrength: evaluation.strength,
-      bestHand: evaluation.bestHand
+      bestHand: evaluation.bestHand,
+      winAmount: 0 // 初始化赢得金额为0
     };
   });
 
@@ -472,6 +473,14 @@ export const handleShowdown = (state: GameState): GameState => {
   // 分配奖池
   const winAmount = Math.floor(state.pot / winners.length);
   const remainder = state.pot % winners.length;
+
+  // 更新赢家的赢得金额
+  handRanks.forEach(hr => {
+    if (winners.includes(hr.playerId)) {
+      const extraChip = winners.indexOf(hr.playerId) < remainder ? 1 : 0;
+      hr.winAmount = winAmount + extraChip;
+    }
+  });
 
   const updatedPlayers = state.players.map(player => {
     if (winners.includes(player.id)) {
@@ -492,7 +501,8 @@ export const handleShowdown = (state: GameState): GameState => {
     isGameStarted: true, // 保持游戏状态为已开始
     showdownResults: {
       winners,
-      handRanks
+      handRanks,
+      potAmount: state.pot // 添加总底池金额
     }
   };
 };

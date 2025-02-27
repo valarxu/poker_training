@@ -100,10 +100,17 @@ const makeGTODecision = (
     }
   }
   
+  // 检查是否已经有人加注，如果有，降低再次加注的概率
+  const hasRaised = state.lastRaisePlayerId !== undefined;
+  
   // 翻前策略
   if (state.gamePhase === 'preflop') {
     // 强力起手牌
     if (adjustedStrength > 0.8) {
+      // 如果已经有人加注，降低再次加注的概率
+      if (hasRaised && Math.random() < 0.4) {
+        return { type: 'call', playerId };
+      }
       return {
         type: 'raise',
         playerId,
@@ -113,8 +120,12 @@ const makeGTODecision = (
     
     // 中等起手牌
     if (adjustedStrength > 0.6) {
-      // 70%概率加注，30%概率跟注
-      if (Math.random() < 0.7) {
+      // 如果已经有人加注，大幅降低再次加注的概率
+      if (hasRaised && Math.random() < 0.7) {
+        return { type: 'call', playerId };
+      }
+      // 50%概率加注，50%概率跟注
+      if (Math.random() < 0.5) {
         return {
           type: 'raise',
           playerId,
@@ -136,8 +147,12 @@ const makeGTODecision = (
   // 强牌
   if (adjustedStrength > 0.8) {
     const raiseAmount = calculateRaiseAmount(state, player, adjustedStrength);
-    // 90%概率加注
-    if (Math.random() < 0.9) {
+    // 如果已经有人加注，降低再次加注的概率
+    if (hasRaised && Math.random() < 0.3) {
+      return { type: 'call', playerId };
+    }
+    // 70%概率加注
+    if (Math.random() < 0.7) {
       return { type: 'raise', playerId, amount: raiseAmount };
     }
     return { type: 'call', playerId };
@@ -146,8 +161,12 @@ const makeGTODecision = (
   // 中强牌
   if (adjustedStrength > 0.6) {
     const raiseAmount = calculateRaiseAmount(state, player, adjustedStrength);
-    // 60%概率加注
-    if (Math.random() < 0.6) {
+    // 如果已经有人加注，大幅降低再次加注的概率
+    if (hasRaised && Math.random() < 0.6) {
+      return { type: 'call', playerId };
+    }
+    // 40%概率加注
+    if (Math.random() < 0.4) {
       return { type: 'raise', playerId, amount: raiseAmount };
     }
     return { type: 'call', playerId };
@@ -155,8 +174,12 @@ const makeGTODecision = (
   
   // 中等牌力
   if (adjustedStrength > potOdds * 1.5) {
-    // 30%概率加注
-    if (Math.random() < 0.3) {
+    // 如果已经有人加注，几乎不再加注
+    if (hasRaised && Math.random() < 0.9) {
+      return { type: 'call', playerId };
+    }
+    // 20%概率加注
+    if (Math.random() < 0.2) {
       return {
         type: 'raise',
         playerId,
@@ -181,4 +204,4 @@ export const getAIAction = (state: GameState, playerId: number): GameAction => {
   const positionWeight = positionWeights[player.positionName];
   
   return makeGTODecision(state, playerId, handEvaluation.strength, positionWeight);
-}; 
+};

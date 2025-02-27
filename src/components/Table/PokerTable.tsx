@@ -11,7 +11,7 @@ const PokerTable: React.FC = () => {
   const [isPlayerTurn, setIsPlayerTurn] = useState(false);
   const [aiThinkingTime, setAiThinkingTime] = useState<number>(0);
   const [isAiThinking, setIsAiThinking] = useState(false);
-  
+
   // 开始新游戏
   const handleStartGame = () => {
     // 如果当前是摊牌阶段，则开始新的一轮
@@ -22,37 +22,37 @@ const PokerTable: React.FC = () => {
       setGameState(startNewGame(gameState));
     }
   };
-  
+
   // 处理玩家行动
   const handlePlayerAction = (action: GameAction) => {
     if (!isPlayerTurn) return;
-    
+
     let newState = handleAction(gameState, action);
     setGameState(newState);
     setIsPlayerTurn(false);
   };
-  
+
   // 处理AI行动
   const handleAITurn = async () => {
     const currentPlayer = gameState.players[gameState.currentPlayer];
-    
+
     if (!currentPlayer.isHuman && currentPlayer.isActive && currentPlayer.status === 'acting') {
       setIsAiThinking(true);
       setAiThinkingTime(2);
-      
+
       // 启动5秒倒计时
       for (let i = 2; i > 0; i--) {
         setAiThinkingTime(i);
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
-      
+
       const aiAction = getAIAction(gameState, gameState.currentPlayer);
       const newState = handleAction(gameState, aiAction);
       setGameState(newState);
       setIsAiThinking(false);
     }
   };
-  
+
   // 检查当前回合是否结束
   const checkRoundEnd = () => {
     if (isRoundComplete(gameState)) {
@@ -75,13 +75,13 @@ const PokerTable: React.FC = () => {
       // 摊牌阶段不自动进入下一轮，等待玩家点击"开始游戏"按钮
     }
   };
-  
+
   useEffect(() => {
     if (gameState.isGameStarted && !isPlayerTurn && !isAiThinking) {
       handleAITurn();
     }
   }, [isPlayerTurn, gameState.currentPlayer, isAiThinking]);
-  
+
   useEffect(() => {
     if (gameState.isGameStarted) {
       checkRoundEnd();
@@ -98,7 +98,7 @@ const PokerTable: React.FC = () => {
       }
     }
   }, [gameState.currentPlayer, gameState.players, gameState.gamePhase]);
-  
+
   // 获取游戏阶段的文本描述
   const getGamePhaseText = (phase: GamePhase): string => {
     switch (phase) {
@@ -118,7 +118,7 @@ const PokerTable: React.FC = () => {
         return '未知阶段';
     }
   };
-  
+
   // 玩家操作按钮
   const ActionButtons = () => (
     <VStack spacing={4}>
@@ -158,7 +158,7 @@ const PokerTable: React.FC = () => {
               加注
             </Button>
           </HStack>
-          
+
           {isAiThinking && (
             <Text color="yellow.300" fontSize="lg">
               AI思考中... {aiThinkingTime}秒
@@ -168,7 +168,7 @@ const PokerTable: React.FC = () => {
       )}
     </VStack>
   );
-  
+
   // 获取玩家位置的网格区域，调整布局避免被公共牌和摊牌结果遮挡
   const getPlayerPosition = (index: number): { gridArea: string } => {
     // 按照顺时针顺序排列位置，调整位置避免遮挡
@@ -182,12 +182,12 @@ const PokerTable: React.FC = () => {
       { gridArea: 'top-right-center' },
       { gridArea: 'top-right' }
     ];
-    
+
     // 如果是人类玩家，固定在bottom-right位置
     if (gameState.players[index].isHuman) {
       return positions[0];
     }
-    
+
     // 计算AI玩家的位置
     // 找出这个AI是第几个AI（跳过人类玩家）
     let aiIndex = 0;
@@ -196,20 +196,20 @@ const PokerTable: React.FC = () => {
         aiIndex++;
       }
     }
-    
+
     // 返回对应的位置
     return positions[aiIndex + 1]; // +1是因为第0个位置是给人类玩家的
   };
-  
+
   // 添加ShowdownResults组件，调整位置避免遮挡玩家
   const ShowdownResults = () => {
     if (!gameState.showdownResults) return null;
-    
+
     return (
       <Box
-        position="absolute"
+        position="fixed"
         top="10%"
-        left="50%"
+        left="80%"
         transform="translateX(-50%)"
         bg="rgba(0, 0, 0, 0.8)"
         color="white"
@@ -223,38 +223,38 @@ const PokerTable: React.FC = () => {
         <Text fontSize="xl" fontWeight="bold" mb={4}>
           摊牌结果
         </Text>
-        
+
         <VStack spacing={3} align="stretch">
           <Text fontSize="lg" color="yellow.300">
-            赢家: {gameState.showdownResults?.winners.map(id => 
+            赢家: {gameState.showdownResults?.winners.map(id =>
               gameState.players.find(p => p.id === id)?.name
             ).join(', ')}
           </Text>
-          
+
           <Text fontSize="md" mb={2}>
             赢得: {gameState.pot} BB
           </Text>
-          
+
           {gameState.showdownResults?.handRanks.map((result, index) => {
             const player = gameState.players.find(p => p.id === result.playerId);
             if (!player) return null;
-            
+
             // 获取手牌等级的文本描述
             const getHandRankText = (rank: number) => {
               const ranks = [
-                '高牌', '一对', '两对', '三条', 
-                '顺子', '同花', '葫芦', '四条', 
+                '高牌', '一对', '两对', '三条',
+                '顺子', '同花', '葫芦', '四条',
                 '同花顺', '皇家同花顺'
               ];
               return ranks[rank] || '未知';
             };
-            
+
             return (
-              <Box 
-                key={index} 
-                p={2} 
-                bg={gameState.showdownResults?.winners.includes(result.playerId) 
-                  ? "green.800" 
+              <Box
+                key={index}
+                p={2}
+                bg={gameState.showdownResults?.winners.includes(result.playerId)
+                  ? "green.800"
                   : "gray.800"
                 }
                 borderRadius="md"
@@ -268,14 +268,14 @@ const PokerTable: React.FC = () => {
             );
           })}
         </VStack>
-        
+
         <Text fontSize="sm" mt={4} color="gray.400">
           点击"开始新一轮"继续游戏
         </Text>
       </Box>
     );
   };
-  
+
   return (
     <Box h="100vh" bg="green.700" position="relative">
       <Center h="100%">
@@ -298,22 +298,12 @@ const PokerTable: React.FC = () => {
             gridTemplateColumns="1fr 1fr 1fr 1fr 1fr"
             gap={4}
           >
-            {/* 游戏信息 */}
-            <HStack justify="space-between" w="100%" position="absolute" top="0" left="0" p={4}>
-              <Text color="white" fontSize="xl">
-                阶段: {getGamePhaseText(gameState.gamePhase)}
-              </Text>
-              <Text color="white" fontSize="xl">
-                底池: {gameState.pot} BB
-              </Text>
-            </HStack>
-            
             {/* 公共牌 - 放在中央，但调整位置避免遮挡玩家 */}
-            <Box 
-              position="absolute" 
-              top="40%" 
-              left="50%" 
-              transform="translate(-50%, -50%)" 
+            <Box
+              position="absolute"
+              top="40%"
+              left="50%"
+              transform="translate(-50%, -50%)"
               zIndex={2}
               bg="green.500"
               p={4}
@@ -329,18 +319,21 @@ const PokerTable: React.FC = () => {
                   <Text color="white" fontSize="lg" fontWeight="bold">
                     公共牌
                   </Text>
+                  <Text color="white" fontSize="xl">
+                    底池: {gameState.pot} BB
+                  </Text>
                   <Text color="white" fontSize="lg">
                     {gameState.gamePhase === 'not_started' ? '等待开始' :
-                     gameState.gamePhase === 'preflop' ? '翻牌前' :
-                     gameState.gamePhase === 'flop' ? '翻牌' :
-                     gameState.gamePhase === 'turn' ? '转牌' :
-                     gameState.gamePhase === 'river' ? '河牌' : '摊牌'}
+                      gameState.gamePhase === 'preflop' ? '翻牌前' :
+                        gameState.gamePhase === 'flop' ? '翻牌' :
+                          gameState.gamePhase === 'turn' ? '转牌' :
+                            gameState.gamePhase === 'river' ? '河牌' : '摊牌'}
                   </Text>
                 </HStack>
                 <CommunityCards cards={gameState.communityCards} />
               </VStack>
             </Box>
-            
+
             {/* 玩家组件 */}
             {gameState.players.map((player, index) => (
               <Box
@@ -357,10 +350,10 @@ const PokerTable: React.FC = () => {
                 />
               </Box>
             ))}
-            
+
             {/* 摊牌结果 */}
             {gameState.gamePhase === 'showdown' && <ShowdownResults />}
-            
+
             {/* 玩家操作按钮 */}
             <Box position="absolute" bottom="20px" left="50%" transform="translateX(-50%)">
               <ActionButtons />
