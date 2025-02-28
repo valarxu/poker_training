@@ -34,11 +34,13 @@ export interface HandRankResult {
   handRank: number;
   handStrength: number;
   bestHand?: Card[];
+  winAmount?: number;
 }
 
 export interface ShowdownResult {
   winners: number[];
   handRanks: HandRankResult[];
+  potAmount?: number;
 }
 
 export interface GameState {

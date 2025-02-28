@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Box, Grid, Text, Button, VStack, HStack, Center, Flex } from '@chakra-ui/react';
-import { GameState, Player, PlayerStatus, GamePhase, GameAction } from '../../types/poker';
-import { initializeGameState, startNewGame, handleAction, nextGamePhase, startNewRound, isRoundComplete, findNextActivePlayerFromPosition } from '../../utils/poker/gameLogic';
+import { Box, Text, Button, VStack, HStack, Center } from '@chakra-ui/react';
+import { GameState, GameAction } from '../../types/poker';
+import { initializeGameState, startNewGame, handleAction, nextGamePhase, startNewRound, isRoundComplete } from '../../utils/poker/gameLogic';
 import { getAIAction } from '../../utils/ai/aiLogic';
 import PlayerComponent from '../Player/PlayerComponent';
 import CommunityCards from '../Cards/CommunityCards';
@@ -98,26 +98,6 @@ const PokerTable: React.FC = () => {
       }
     }
   }, [gameState.currentPlayer, gameState.players, gameState.gamePhase]);
-
-  // 获取游戏阶段的文本描述
-  const getGamePhaseText = (phase: GamePhase): string => {
-    switch (phase) {
-      case 'not_started':
-        return '等待开始';
-      case 'preflop':
-        return '翻牌前';
-      case 'flop':
-        return '翻牌';
-      case 'turn':
-        return '转牌';
-      case 'river':
-        return '河牌';
-      case 'showdown':
-        return '摊牌';
-      default:
-        return '未知阶段';
-    }
-  };
 
   // 玩家操作按钮
   const ActionButtons = () => (
@@ -343,7 +323,7 @@ const PokerTable: React.FC = () => {
               >
                 <PlayerComponent
                   player={player}
-                  position={player.position}
+                  position={player.position.toString()}
                   isCurrentPlayer={gameState.currentPlayer === index}
                   isDealer={index === gameState.dealerPosition}
                   gamePhase={gameState.gamePhase}

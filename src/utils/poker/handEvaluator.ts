@@ -85,12 +85,6 @@ const isStraight = (ranks: number[]): boolean => {
   return false;
 };
 
-// 检查是否是同花
-const isFlush = (cards: Card[]): boolean => {
-  const suits = cards.map(card => card.suit);
-  return new Set(suits).size === 1;
-};
-
 // 获取所有对子、三条、四条
 const getGroups = (ranks: number[]): { pairs: number[], trips: number[], quads: number[] } => {
   const count = new Map<number, number>();
@@ -180,7 +174,11 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
     const pairCards = allCards.filter(card => rankValues[card.rank] === pairRank);
     
     const bestHand = [...tripCards, ...pairCards.slice(0, 2)];
-    return { rank: HandRank.FullHouse, strength: 0.85 + (tripRank / 140), bestHand };
+    return { 
+      rank: HandRank.FullHouse, 
+      strength: 0.85 + (tripRank / 100) + (pairRank / 10000), 
+      bestHand 
+    };
   }
   
   // 同花
@@ -193,8 +191,14 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
       .sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
     
     const bestHand = flushCards.slice(0, 5);
-    const maxRank = Math.max(...bestHand.map(card => rankValues[card.rank]));
-    return { rank: HandRank.Flush, strength: 0.8 + (maxRank / 140), bestHand };
+    // 考虑所有5张牌的大小
+    const ranks = bestHand.map(card => rankValues[card.rank]);
+    return { 
+      rank: HandRank.Flush, 
+      strength: 0.8 + (ranks[0] / 100) + (ranks[1] / 10000) + (ranks[2] / 1000000) + 
+                (ranks[3] / 100000000) + (ranks[4] / 10000000000), 
+      bestHand 
+    };
   }
   
   // 顺子
@@ -239,7 +243,13 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
       .sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
     
     const bestHand = [...tripCards, ...kickers.slice(0, 2)];
-    return { rank: HandRank.ThreeOfAKind, strength: 0.7 + (tripRank / 140), bestHand };
+    const kickerRanks = kickers.slice(0, 2).map(card => rankValues[card.rank]);
+    return { 
+      rank: HandRank.ThreeOfAKind, 
+      strength: 0.7 + (tripRank / 100) + (kickerRanks[0] / 10000) + 
+                (kickerRanks[1] / 1000000), 
+      bestHand 
+    };
   }
   
   // 两对
@@ -255,7 +265,16 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
       .sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
     
     const bestHand = [...highPairCards, ...lowPairCards, kickers[0]];
-    return { rank: HandRank.TwoPair, strength: 0.6 + (highPairRank / 140) + (lowPairRank / 1400), bestHand };
+    
+    // 改进的强度计算，更好地考虑踢脚牌
+    // 高对占主要权重，低对次之，踢脚牌最后
+    // 使用更精确的权重分配，确保高对之间的比较优先级最高
+    const kickerRank = kickers.length > 0 ? rankValues[kickers[0].rank] : 2;
+    return { 
+      rank: HandRank.TwoPair, 
+      strength: 0.6 + (highPairRank / 100) + (lowPairRank / 10000) + (kickerRank / 1000000), 
+      bestHand 
+    };
   }
   
   // 一对
@@ -268,13 +287,22 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
       .sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
     
     const bestHand = [...pairCards, ...kickers.slice(0, 3)];
-    return { rank: HandRank.Pair, strength: 0.5 + (pairRank / 140), bestHand };
+    const kickerRanks = kickers.slice(0, 3).map(card => rankValues[card.rank]);
+    return { 
+      rank: HandRank.Pair, 
+      strength: 0.5 + (pairRank / 100) + (kickerRanks[0] / 10000) + 
+                (kickerRanks[1] / 1000000) + (kickerRanks[2] / 100000000), 
+      bestHand 
+    };
   }
   
   // 高牌
   const sortedCards = [...allCards].sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
   const bestHand = sortedCards.slice(0, 5);
-  const maxRank = Math.max(...bestHand.map(card => rankValues[card.rank]));
-  
-  return { rank: HandRank.HighCard, strength: 0.4 + (maxRank / 140), bestHand };
+  return { 
+    rank: HandRank.HighCard, 
+    strength: 0.4 + (ranks[0] / 100) + (ranks[1] / 10000) + (ranks[2] / 1000000) + 
+              (ranks[3] / 100000000) + (ranks[4] / 10000000000), 
+    bestHand 
+  };
 }; 

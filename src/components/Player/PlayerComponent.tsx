@@ -13,9 +13,7 @@ interface PlayerComponentProps {
 
 const PlayerComponent: React.FC<PlayerComponentProps> = ({
   player,
-  position,
   isCurrentPlayer,
-  isDealer,
   gamePhase
 }) => {
   // 确定玩家状态的显示文本和颜色

@@ -1,5 +1,5 @@
-import { GameState, Player, GameAction, Card, PositionName } from '../../types/poker';
-import { evaluateHand, calculateStartingHandStrength } from '../poker/handEvaluator';
+import { GameState, Player, GameAction, PositionName } from '../../types/poker';
+import { evaluateHand } from '../poker/handEvaluator';
 
 // 位置权重
 const positionWeights: { [key in PositionName]: number } = {
@@ -19,19 +19,8 @@ const calculatePotOdds = (state: GameState, player: Player): number => {
   return callAmount / (state.pot + callAmount);
 };
 
-// 计算有效栈深
-const calculateEffectiveStack = (state: GameState, player: Player): number => {
-  const otherActivePlayers = state.players.filter(p => 
-    p.id !== player.id && p.isActive && p.status !== 'folded'
-  );
-  const minOtherStack = Math.min(...otherActivePlayers.map(p => p.chips));
-  return Math.min(player.chips, minOtherStack);
-};
-
 // 将金额调整为0.5BB的整数倍
 const roundToBBMultiple = (amount: number, smallBlind: number): number => {
-  // 一个大盲注等于两个小盲注
-  const bbUnit = smallBlind * 2;
   // 最小单位是0.5BB，即一个小盲注
   const minUnit = smallBlind;
   
@@ -41,7 +30,6 @@ const roundToBBMultiple = (amount: number, smallBlind: number): number => {
 
 // 计算加注大小
 const calculateRaiseAmount = (state: GameState, player: Player, handStrength: number): number => {
-  const effectiveStack = calculateEffectiveStack(state, player);
   const potSize = state.pot;
   const minRaise = state.currentBet * 2;
   
@@ -81,7 +69,6 @@ const makeGTODecision = (
 ): GameAction => {
   const player = state.players[playerId];
   const potOdds = calculatePotOdds(state, player);
-  const effectiveStack = calculateEffectiveStack(state, player);
   
   // 调整手牌强度，考虑位置权重
   const adjustedStrength = handStrength * positionWeight;

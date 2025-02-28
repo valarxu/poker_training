@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Image } from '@chakra-ui/react';
+import { Box } from '@chakra-ui/react';
 import { Card } from '../../types/poker';
 
 interface CardComponentProps {
@@ -8,14 +8,6 @@ interface CardComponentProps {
 }
 
 const CardComponent: React.FC<CardComponentProps> = ({ card, isHidden = false }) => {
-  // 获取卡牌图片路径
-  const getCardImage = () => {
-    if (isHidden) {
-      return '/images/card-back.png';
-    }
-    return `/images/${card.rank}_of_${card.suit}.png`;
-  };
-
   // 根据花色设置卡牌颜色
   const getCardColor = () => {
     if (card.suit === 'hearts' || card.suit === 'diamonds') {

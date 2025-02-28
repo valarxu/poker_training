@@ -1,4 +1,4 @@
-import { Card, Suit, Rank, GameState, Player, Action, GameAction, PlayerStatus, PositionName, GamePhase } from '../../types/poker';
+import { Card, Suit, Rank, GameState, Player, GameAction, PlayerStatus, PositionName, GamePhase } from '../../types/poker';
 import { evaluateHand } from './handEvaluator';
 
 // 创建一副新牌
@@ -91,22 +91,6 @@ export const initializeGameState = (): GameState => {
   };
 };
 
-// 获取下一个应该行动的玩家
-const getNextActivePlayer = (state: GameState, startPosition: number): number => {
-  const playerCount = state.players.length;
-  let nextPlayer = startPosition;
-  
-  // 寻找下一个未弃牌的玩家
-  do {
-    nextPlayer = (nextPlayer + 1) % playerCount;
-  } while (
-    nextPlayer !== startPosition && 
-    (!state.players[nextPlayer].isActive || state.players[nextPlayer].status === 'folded')
-  );
-  
-  return nextPlayer;
-};
-
 // 获取第一个行动位置
 const getFirstActionPosition = (state: GameState): number => {
   const playerCount = state.players.length;
@@ -137,7 +121,7 @@ const getFirstActionPosition = (state: GameState): number => {
 };
 
 // 从指定位置开始寻找下一个可以行动的玩家
-const findNextActivePlayerFromPosition = (state: GameState, startPosition: number): number => {
+export const findNextActivePlayerFromPosition = (state: GameState, startPosition: number): number => {
   const playerCount = state.players.length;
   let nextPlayer = (startPosition + 1) % playerCount;
   let startPlayer = nextPlayer;
@@ -461,13 +445,24 @@ export const handleShowdown = (state: GameState): GameState => {
     };
   });
 
-  // 按手牌强度排序
-  handRanks.sort((a, b) => b.handStrength - a.handStrength);
+  // 按手牌等级排序
+  handRanks.sort((a, b) => {
+    // 首先比较手牌等级
+    if (b.handRank !== a.handRank) {
+      return b.handRank - a.handRank;
+    }
+    
+    // 如果手牌等级相同，比较手牌强度
+    // 手牌强度应该已经考虑了同等级牌型下的大小比较
+    return b.handStrength - a.handStrength;
+  });
 
   // 确定赢家（可能有多个赢家，如果有平局）
+  const highestRank = handRanks[0].handRank;
   const highestStrength = handRanks[0].handStrength;
+  
   const winners = handRanks
-    .filter(hr => Math.abs(hr.handStrength - highestStrength) < 0.0001)
+    .filter(hr => hr.handRank === highestRank && Math.abs(hr.handStrength - highestStrength) < 0.0001)
     .map(hr => hr.playerId);
 
   // 分配奖池
