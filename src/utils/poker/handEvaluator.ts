@@ -31,6 +31,34 @@ const rankValues: { [key in Rank]: number } = {
   'A': 14
 };
 
+// 牌型概率分布（基于7张牌中最佳5张的统计）
+const handRankProbabilities = {
+  [HandRank.HighCard]: 0.174,      // 高牌：17.4%
+  [HandRank.Pair]: 0.438,          // 一对：43.8%
+  [HandRank.TwoPair]: 0.235,       // 两对：23.5%
+  [HandRank.ThreeOfAKind]: 0.0483, // 三条：4.83%
+  [HandRank.Straight]: 0.0462,     // 顺子：4.62%
+  [HandRank.Flush]: 0.0303,        // 同花：3.03%
+  [HandRank.FullHouse]: 0.026,     // 葫芦：2.6%
+  [HandRank.FourOfAKind]: 0.00168, // 四条：0.168%
+  [HandRank.StraightFlush]: 0.00031, // 同花顺：0.031%
+  [HandRank.RoyalFlush]: 0.0000015  // 皇家同花顺：0.00015%
+};
+
+// 计算牌型基础强度（累积概率）
+const handRankBaseStrength: { [key in HandRank]: number } = (() => {
+  const result = {} as { [key in HandRank]: number };
+  let cumulativeProbability = 0;
+  
+  // 从最低牌型开始累加概率
+  for (let rank = HandRank.HighCard; rank <= HandRank.RoyalFlush; rank++) {
+    result[rank] = cumulativeProbability;
+    cumulativeProbability += handRankProbabilities[rank as HandRank];
+  }
+  
+  return result;
+})();
+
 // 计算起手牌强度
 export const calculateStartingHandStrength = (cards: Card[]): number => {
   if (cards.length !== 2) return 0;
@@ -136,9 +164,15 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
           const five = sortedCards.find(card => card.rank === '5')!;
           const bestHand = [ace, two, three, four, five];
           
-          if (ace.rank === 'A') {
-            return { rank: HandRank.StraightFlush, strength: 0.95, bestHand };
-          }
+          // A-5同花顺是最低的同花顺
+          const baseStrength = handRankBaseStrength[HandRank.StraightFlush];
+          const rankFraction = 0; // 最低同花顺
+          const strengthRange = handRankProbabilities[HandRank.StraightFlush] + handRankProbabilities[HandRank.RoyalFlush];
+          return { 
+            rank: HandRank.StraightFlush, 
+            strength: baseStrength + (rankFraction * strengthRange * 0.99), 
+            bestHand 
+          };
         }
         
         // 常规同花顺
@@ -146,9 +180,24 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
         const bestHand = sortedCards.slice(0, 5);
         
         if (maxRank === 14 && bestHand.some(card => card.rank === 'K')) {
-          return { rank: HandRank.RoyalFlush, strength: 1, bestHand };
+          // 皇家同花顺
+          return { 
+            rank: HandRank.RoyalFlush, 
+            strength: 1, 
+            bestHand 
+          };
         }
-        return { rank: HandRank.StraightFlush, strength: 0.95 + (maxRank / 300), bestHand };
+        
+        // 普通同花顺
+        const baseStrength = handRankBaseStrength[HandRank.StraightFlush];
+        // 计算在同花顺中的相对强度（5高到K高）
+        const rankFraction = (maxRank - 5) / 8; // 5是最低顺子，13是K高顺子
+        const strengthRange = handRankProbabilities[HandRank.StraightFlush] + handRankProbabilities[HandRank.RoyalFlush];
+        return { 
+          rank: HandRank.StraightFlush, 
+          strength: baseStrength + (rankFraction * strengthRange * 0.99), 
+          bestHand 
+        };
       }
     }
   }
@@ -162,7 +211,16 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
       .sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
     
     const bestHand = [...quadCards, kickers[0]];
-    return { rank: HandRank.FourOfAKind, strength: 0.9 + (quadRank / 140), bestHand };
+    
+    const baseStrength = handRankBaseStrength[HandRank.FourOfAKind];
+    // 四条的相对强度主要由四条牌值决定，其次是踢脚
+    const rankFraction = (quadRank - 2) / 12 + (rankValues[kickers[0].rank] - 2) / (12 * 13);
+    const strengthRange = handRankProbabilities[HandRank.FourOfAKind];
+    return { 
+      rank: HandRank.FourOfAKind, 
+      strength: baseStrength + (rankFraction * strengthRange * 0.99), 
+      bestHand 
+    };
   }
   
   // 葫芦
@@ -174,9 +232,14 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
     const pairCards = allCards.filter(card => rankValues[card.rank] === pairRank);
     
     const bestHand = [...tripCards, ...pairCards.slice(0, 2)];
+    
+    const baseStrength = handRankBaseStrength[HandRank.FullHouse];
+    // 葫芦的相对强度主要由三条牌值决定，其次是对子
+    const rankFraction = (tripRank - 2) / 12 + (pairRank - 2) / (12 * 13);
+    const strengthRange = handRankProbabilities[HandRank.FullHouse];
     return { 
       rank: HandRank.FullHouse, 
-      strength: 0.85 + (tripRank / 100) + (pairRank / 10000), 
+      strength: baseStrength + (rankFraction * strengthRange * 0.99), 
       bestHand 
     };
   }
@@ -191,12 +254,19 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
       .sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
     
     const bestHand = flushCards.slice(0, 5);
-    // 考虑所有5张牌的大小
     const ranks = bestHand.map(card => rankValues[card.rank]);
+    
+    const baseStrength = handRankBaseStrength[HandRank.Flush];
+    // 同花的相对强度由5张牌的大小决定，主要是最大牌
+    const rankFraction = (ranks[0] - 2) / 12 + 
+                         (ranks[1] - 2) / (12 * 13) + 
+                         (ranks[2] - 2) / (12 * 13 * 13) + 
+                         (ranks[3] - 2) / (12 * 13 * 13 * 13) + 
+                         (ranks[4] - 2) / (12 * 13 * 13 * 13 * 13);
+    const strengthRange = handRankProbabilities[HandRank.Flush];
     return { 
       rank: HandRank.Flush, 
-      strength: 0.8 + (ranks[0] / 100) + (ranks[1] / 10000) + (ranks[2] / 1000000) + 
-                (ranks[3] / 100000000) + (ranks[4] / 10000000000), 
+      strength: baseStrength + (rankFraction * strengthRange * 0.99), 
       bestHand 
     };
   }
@@ -216,7 +286,16 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
       const five = allCards.find(card => card.rank === '5')!;
       
       const bestHand = [ace, two, three, four, five];
-      return { rank: HandRank.Straight, strength: 0.75, bestHand };
+      
+      const baseStrength = handRankBaseStrength[HandRank.Straight];
+      // A-5顺子是最低的顺子
+      const rankFraction = 0;
+      const strengthRange = handRankProbabilities[HandRank.Straight];
+      return { 
+        rank: HandRank.Straight, 
+        strength: baseStrength + (rankFraction * strengthRange * 0.99), 
+        bestHand 
+      };
     }
     
     // 常规顺子
@@ -228,7 +307,16 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
         );
         
         const maxRank = Math.max(...straightRanks);
-        return { rank: HandRank.Straight, strength: 0.75 + (maxRank / 140), bestHand };
+        
+        const baseStrength = handRankBaseStrength[HandRank.Straight];
+        // 顺子的相对强度由最大牌决定
+        const rankFraction = (maxRank - 5) / 9; // 5高到A高
+        const strengthRange = handRankProbabilities[HandRank.Straight];
+        return { 
+          rank: HandRank.Straight, 
+          strength: baseStrength + (rankFraction * strengthRange * 0.99), 
+          bestHand 
+        };
       }
     }
   }
@@ -244,10 +332,16 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
     
     const bestHand = [...tripCards, ...kickers.slice(0, 2)];
     const kickerRanks = kickers.slice(0, 2).map(card => rankValues[card.rank]);
+    
+    const baseStrength = handRankBaseStrength[HandRank.ThreeOfAKind];
+    // 三条的相对强度主要由三条牌值决定，其次是踢脚
+    const rankFraction = (tripRank - 2) / 12 + 
+                         (kickerRanks[0] - 2) / (12 * 13) + 
+                         (kickerRanks[1] - 2) / (12 * 13 * 13);
+    const strengthRange = handRankProbabilities[HandRank.ThreeOfAKind];
     return { 
       rank: HandRank.ThreeOfAKind, 
-      strength: 0.7 + (tripRank / 100) + (kickerRanks[0] / 10000) + 
-                (kickerRanks[1] / 1000000), 
+      strength: baseStrength + (rankFraction * strengthRange * 0.99), 
       bestHand 
     };
   }
@@ -265,14 +359,17 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
       .sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
     
     const bestHand = [...highPairCards, ...lowPairCards, kickers[0]];
-    
-    // 改进的强度计算，更好地考虑踢脚牌
-    // 高对占主要权重，低对次之，踢脚牌最后
-    // 使用更精确的权重分配，确保高对之间的比较优先级最高
     const kickerRank = kickers.length > 0 ? rankValues[kickers[0].rank] : 2;
+    
+    const baseStrength = handRankBaseStrength[HandRank.TwoPair];
+    // 两对的相对强度由高对、低对和踢脚决定
+    const rankFraction = (highPairRank - 2) / 12 + 
+                         (lowPairRank - 2) / (12 * 13) + 
+                         (kickerRank - 2) / (12 * 13 * 13);
+    const strengthRange = handRankProbabilities[HandRank.TwoPair];
     return { 
       rank: HandRank.TwoPair, 
-      strength: 0.6 + (highPairRank / 100) + (lowPairRank / 10000) + (kickerRank / 1000000), 
+      strength: baseStrength + (rankFraction * strengthRange * 0.99), 
       bestHand 
     };
   }
@@ -288,10 +385,17 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
     
     const bestHand = [...pairCards, ...kickers.slice(0, 3)];
     const kickerRanks = kickers.slice(0, 3).map(card => rankValues[card.rank]);
+    
+    const baseStrength = handRankBaseStrength[HandRank.Pair];
+    // 一对的相对强度由对子和三个踢脚决定
+    const rankFraction = (pairRank - 2) / 12 + 
+                         (kickerRanks[0] - 2) / (12 * 13) + 
+                         (kickerRanks[1] - 2) / (12 * 13 * 13) + 
+                         (kickerRanks[2] - 2) / (12 * 13 * 13 * 13);
+    const strengthRange = handRankProbabilities[HandRank.Pair];
     return { 
       rank: HandRank.Pair, 
-      strength: 0.5 + (pairRank / 100) + (kickerRanks[0] / 10000) + 
-                (kickerRanks[1] / 1000000) + (kickerRanks[2] / 100000000), 
+      strength: baseStrength + (rankFraction * strengthRange * 0.99), 
       bestHand 
     };
   }
@@ -299,10 +403,19 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
   // 高牌
   const sortedCards = [...allCards].sort((a, b) => rankValues[b.rank] - rankValues[a.rank]);
   const bestHand = sortedCards.slice(0, 5);
+  const bestRanks = bestHand.map(card => rankValues[card.rank]);
+  
+  const baseStrength = handRankBaseStrength[HandRank.HighCard];
+  // 高牌的相对强度由5张牌的大小决定
+  const rankFraction = (bestRanks[0] - 2) / 12 + 
+                       (bestRanks[1] - 2) / (12 * 13) + 
+                       (bestRanks[2] - 2) / (12 * 13 * 13) + 
+                       (bestRanks[3] - 2) / (12 * 13 * 13 * 13) + 
+                       (bestRanks[4] - 2) / (12 * 13 * 13 * 13 * 13);
+  const strengthRange = handRankProbabilities[HandRank.HighCard];
   return { 
     rank: HandRank.HighCard, 
-    strength: 0.4 + (ranks[0] / 100) + (ranks[1] / 10000) + (ranks[2] / 1000000) + 
-              (ranks[3] / 100000000) + (ranks[4] / 10000000000), 
+    strength: baseStrength + (rankFraction * strengthRange * 0.99), 
     bestHand 
   };
 }; 
