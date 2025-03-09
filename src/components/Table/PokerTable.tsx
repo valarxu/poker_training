@@ -111,6 +111,11 @@ const PokerTable: React.FC = () => {
         </Button>
       ) : (
         <>
+          {isAiThinking && (
+            <Text color="yellow.300" fontSize="lg">
+              AI思考中... {aiThinkingTime}秒
+            </Text>
+          )}
           <HStack spacing={4}>
             <Button
               colorScheme="red"
@@ -138,12 +143,6 @@ const PokerTable: React.FC = () => {
               加注
             </Button>
           </HStack>
-
-          {isAiThinking && (
-            <Text color="yellow.300" fontSize="lg">
-              AI思考中... {aiThinkingTime}秒
-            </Text>
-          )}
         </>
       )}
     </VStack>
@@ -327,6 +326,8 @@ const PokerTable: React.FC = () => {
                   isCurrentPlayer={gameState.currentPlayer === index}
                   isDealer={index === gameState.dealerPosition}
                   gamePhase={gameState.gamePhase}
+                  communityCards={gameState.communityCards}
+                  playerCount={gameState.players.filter(p => p.status !== 'folded').length}
                 />
               </Box>
             ))}

@@ -418,4 +418,84 @@ export const evaluateHand = (holeCards: Card[], communityCards: Card[]): { rank:
     strength: baseStrength + (rankFraction * strengthRange * 0.99), 
     bestHand 
   };
+};
+
+// 使用蒙特卡洛模拟计算手牌胜率
+export const calculateWinRate = (
+  holeCards: Card[], 
+  communityCards: Card[], 
+  playerCount: number, 
+  simulations = 1000
+): number => {
+  // 如果没有手牌，返回0
+  if (holeCards.length !== 2) return 0;
+  
+  // 已知的所有牌
+  const knownCards = [...holeCards, ...communityCards];
+  
+  // 创建一副完整的牌，并移除已知的牌
+  const suits: Suit[] = ['hearts', 'diamonds', 'clubs', 'spades'];
+  const ranks: Rank[] = ['2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+  const fullDeck: Card[] = [];
+  
+  for (const suit of suits) {
+    for (const rank of ranks) {
+      const card = { suit, rank };
+      // 检查这张牌是否已经在已知牌中
+      const isCardKnown = knownCards.some(
+        knownCard => knownCard.suit === card.suit && knownCard.rank === card.rank
+      );
+      
+      if (!isCardKnown) {
+        fullDeck.push(card);
+      }
+    }
+  }
+  
+  let wins = 0;
+  
+  for (let i = 0; i < simulations; i++) {
+    // 洗牌
+    const shuffledDeck = [...fullDeck].sort(() => Math.random() - 0.5);
+    
+    // 为其他玩家发牌（每人2张）
+    const otherPlayersCards: Card[][] = [];
+    for (let j = 0; j < playerCount - 1; j++) {
+      otherPlayersCards.push([
+        shuffledDeck.pop()!,
+        shuffledDeck.pop()!
+      ]);
+    }
+    
+    // 补全公共牌到5张
+    const remainingCommunityCards: Card[] = [];
+    for (let j = communityCards.length; j < 5; j++) {
+      remainingCommunityCards.push(shuffledDeck.pop()!);
+    }
+    
+    const allCommunityCards = [...communityCards, ...remainingCommunityCards];
+    
+    // 计算玩家手牌强度
+    const playerHandEval = evaluateHand(holeCards, allCommunityCards);
+    
+    // 计算其他玩家手牌强度
+    let isWinner = true;
+    for (const otherCards of otherPlayersCards) {
+      const otherHandEval = evaluateHand(otherCards, allCommunityCards);
+      
+      // 如果其他玩家手牌更强，当前玩家不是赢家
+      if (otherHandEval.strength > playerHandEval.strength) {
+        isWinner = false;
+        break;
+      }
+    }
+    
+    // 如果是赢家，增加赢的次数
+    if (isWinner) {
+      wins++;
+    }
+  }
+  
+  // 计算胜率
+  return wins / simulations;
 }; 
